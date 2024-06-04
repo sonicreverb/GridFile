@@ -48,7 +48,7 @@ vector<Point2D> GridFile2D::regionSearch(const Rectangle& _rect)
     int colStart = 0;
     int colEnd = this->linearAxisScales[0].size();
 
-    for (int xID = 0; xID < this->linearAxisScales[0].size(); xID++) {
+    for (int xID = 0; xID <= this->linearAxisScales[0].size(); xID++) {
         if (_rect.xStart > this->linearAxisScales[0][xID]) colStart = xID + 1;
         if (_rect.xStart < this->linearAxisScales[0][xID]) colEnd = xID;
     }
@@ -56,7 +56,7 @@ vector<Point2D> GridFile2D::regionSearch(const Rectangle& _rect)
     int rowStart = 0;
     int rowEnd = this->linearAxisScales[1].size();
 
-    for (int yID = 0; yID < this->linearAxisScales[1].size(); yID++) {
+    for (int yID = 0; yID <= this->linearAxisScales[1].size(); yID++) {
         if (_rect.yStart > this->linearAxisScales[1][yID]) rowStart = yID + 1;
         if (_rect.yStart < this->linearAxisScales[1][yID]) rowEnd = yID;
     }
@@ -103,10 +103,16 @@ void GridFile2D::insert(Point2D _point)
 
     ExternalBlock* currentBlock = this->grid[row][column].second;
     for (GridCell2D* cell : currentBlock->getCells())
+    {
         for (const Point2D& point : cell->getPoints())
             if (_point.x == point.x && _point.y == point.y) return;
+    }
+       
 
-    currentBlock->insert(_point);
+    //currentBlock->insert(_point);
+    this->grid[row][column].first->insert(_point);
+    if (currentBlock->isOverflowed())
+        splitBlock(column, row);
 }
 
 void GridFile2D::splitCell(int _column, int _row)
@@ -114,7 +120,7 @@ void GridFile2D::splitCell(int _column, int _row)
     int n;
     double splitKey;
 
-    n = (this->linearAxisScales[0].size() > this->linearAxisScales[1].size()) ? 0 : 1;
+    n = (this->linearAxisScales[0].size() <= this->linearAxisScales[1].size()) ? 0 : 1;
 
     if (n == 0) {
         double xStart = this->grid[_row][_column].first->getCoords().xStart;
@@ -128,11 +134,16 @@ void GridFile2D::splitCell(int _column, int _row)
     }
 
     ExternalBlock* currentBlock = this->grid[_row][_column].second;
+    
     ExternalBlock* newBlock = new ExternalBlock();
+    GridCell2D* newCell = new GridCell2D();
+    newBlock->getCells().push_back(newCell);
+    newCell->setParent(newBlock);
+
     vector<Point2D> pointsToMove;
 
     for (GridCell2D* cell : currentBlock->getCells()) {
-        vector<Point2D> points = cell->getPoints();
+        vector<Point2D>& points = cell->getPoints();
         for (auto it = points.begin(); it != points.end();) {
             if ((n == 0 && it->x >= splitKey) || (n == 1 && it->y >= splitKey)) {
                 pointsToMove.push_back(*it);
@@ -140,23 +151,26 @@ void GridFile2D::splitCell(int _column, int _row)
             }
             else ++it;
         }
+        cell->reBuildRectangle();
     }
 
-    for (const Point2D& point : pointsToMove) {
-        newBlock->insert(point);
-    }
+    for (const Point2D& point : pointsToMove)
+        newCell->insert(point);
 
     if (n == 0) {
-        this->linearAxisScales[0].insert(this->linearAxisScales[0].begin() + _column + 1, splitKey);
+        //this->linearAxisScales[0].resize(this->linearAxisScales[0].size() + 1);
+        this->linearAxisScales[0].insert(this->linearAxisScales[0].begin() + _column, splitKey);
 
         for (size_t j = 0; j < this->grid.size(); ++j) {
             this->grid[j].insert(this->grid[j].begin() + _column + 1, this->grid[j][_column]);
         }
 
+        this->grid[_row][_column + 1].first = newCell;
         this->grid[_row][_column + 1].second = newBlock;
     }
     else {
-        this->linearAxisScales[1].insert(this->linearAxisScales[1].begin() + _row + 1, splitKey);
+        //this->linearAxisScales[1].resize(this->linearAxisScales[1].size() + 1);
+        this->linearAxisScales[1].insert(this->linearAxisScales[1].begin() + _row, splitKey);
 
         std::vector<std::pair<GridCell2D*, ExternalBlock*>> newRow(this->grid[0].size());
         for (size_t i = 0; i < this->grid[0].size(); ++i) {
@@ -164,6 +178,7 @@ void GridFile2D::splitCell(int _column, int _row)
         }
 
         this->grid.insert(this->grid.begin() + _row + 1, newRow);
+        this->grid[_row + 1][_column].first = newCell;
         this->grid[_row + 1][_column].second = newBlock;
     }
 }
@@ -272,7 +287,6 @@ void GridFile2D::mergeBlock(int _column, int _row)
         return;
     }
 
-    // Step 2: Merge the blocks
     for (GridCell2D* cell : newBlock->getCells()) {
         for (const Point2D& point : cell->getPoints()) {
             currentBlock->insert(point);
@@ -280,7 +294,7 @@ void GridFile2D::mergeBlock(int _column, int _row)
     }
 
     delete newBlock;
-    replaceBlockReferences(newBlock, currentBlock); // функция замены всех ссылок на BPrime в массиве Grid на B
+    replaceBlockReferences(newBlock, currentBlock);
 
     reduceGrid(_column, _row);
 }

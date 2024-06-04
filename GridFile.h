@@ -22,21 +22,35 @@ private:
     ExternalBlock* parent;
 public:
     static unsigned int capacity;
-    GridCell2D() : xStart(0), yStart(0), xEnd(DBL_MAX), yEnd(DBL_MAX), parent(nullptr) { points.reserve(capacity); }
+    GridCell2D() : xStart(DBL_MIN), yStart(DBL_MIN), xEnd(DBL_MAX), yEnd(DBL_MAX), parent(nullptr) { points.reserve(capacity); }
     GridCell2D(double _xStart, double _yStart, double _xEnd, double _yEnd) : xStart(_xStart), yStart(_yStart), xEnd(_xEnd), yEnd(_yEnd), parent(nullptr) { points.reserve(capacity); }
 
-    const vector<Point2D>& getPoints() const { return this->points; }
+    vector<Point2D>& getPoints() { return this->points; }
     Rectangle getCoords() const {
         Rectangle result = { xStart, yStart, xEnd, yEnd };
         return result;
     }
+    void reBuildRectangle() {
+        this->xStart = DBL_MIN;
+        this->xEnd = DBL_MAX;
+        this->yStart = DBL_MIN;
+        this->yEnd = DBL_MAX;
+
+        for (const Point2D& point : this->points) {
+            if (point.x < xStart || xStart == DBL_MIN) xStart = point.x;
+            if (point.x > xEnd || xEnd == DBL_MAX) xEnd = point.x;
+            if (point.y < yStart || yStart == DBL_MIN) yStart = point.y;
+            if (point.y > yEnd || yEnd == DBL_MAX) yEnd = point.y;
+        }
+
+    }
 
     void insert(Point2D _point) {
         this->points.push_back(_point);
-        if (_point.x < xStart) xStart = _point.x;
-        if (_point.x > xEnd) xEnd = _point.x;
-        if (_point.y < yStart) yStart = _point.y;
-        if (_point.y > yEnd) yEnd = _point.y;
+        if (_point.x < xStart || xStart == DBL_MIN) xStart = _point.x;
+        if (_point.x > xEnd || xEnd == DBL_MAX) xEnd = _point.x;
+        if (_point.y < yStart || yStart == DBL_MIN) yStart = _point.y;
+        if (_point.y > yEnd || yEnd == DBL_MAX) yEnd = _point.y;
     }
     void setParent(ExternalBlock* _parent) { this->parent = _parent; }
 };
